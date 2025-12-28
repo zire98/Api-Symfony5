@@ -11,6 +11,7 @@ use Doctrine\ORM\EntityManagerInterface;
 use FOS\RestBundle\Controller\Annotations as Rest;
 use FOS\RestBundle\Controller\AbstractFOSRestController;
 use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 class PersonasController extends AbstractFOSRestController
 {
@@ -33,10 +34,17 @@ class PersonasController extends AbstractFOSRestController
         $form = $this->createForm(PersonaFormType::class, $personaDto);
         $form->handleRequest($request);
 
-        if ($form->isSubmitted() && $form->isValid()) {
+        if (!$form->isSubmitted()) {
+            return new Response('', Response::HTTP_BAD_REQUEST);
+        }
+
+        if ($form->isValid()) {
             $persona = new Persona();
             $persona->setNombre($personaDto->nombre);
-            $persona->setImage($fileUploader->uploadBase64File($personaDto->base64Image));
+            if ($personaDto->base64Image) {
+                $fileName = $fileUploader->uploadBase64File($personaDto->base64Image);
+                $persona->setImage($fileName);
+            }
             $em->persist($persona);
             $em->flush($persona);
             return $persona;
