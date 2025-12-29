@@ -1,0 +1,6 @@
+App\Entity\Nacionalidad:
+  attributes:
+    id:
+      groups: ['persona']
+    nombre:
+      groups: ['persona']

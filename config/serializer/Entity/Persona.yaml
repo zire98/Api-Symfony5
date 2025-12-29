@@ -6,3 +6,5 @@ App\Entity\Persona:
       groups: ['persona']
     image:
       groups: ['persona']
+    nacionalidades:
+      groups: ['persona']
