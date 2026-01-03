@@ -2,18 +2,11 @@
 
 namespace App\Controller\Api;
 
-use App\Entity\Nacionalidad;
-use App\Entity\Persona;
-use App\Form\Model\NacionalidadDto;
-use App\Form\Model\PersonaDto;
-use App\Form\Type\PersonaFormType;
-use App\Repository\NacionalidadRepository;
-use App\Repository\PersonaRepository;
-use App\Service\FileUploader;
-use Doctrine\Common\Collections\ArrayCollection;
-use Doctrine\ORM\EntityManagerInterface;
+use App\Service\PersonaFormProcessor;
+use App\Service\PersonaManager;
 use FOS\RestBundle\Controller\Annotations as Rest;
 use FOS\RestBundle\Controller\AbstractFOSRestController;
+use FOS\RestBundle\View\View as RestBundleView;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 
@@ -23,37 +16,25 @@ class PersonasController extends AbstractFOSRestController
      * @Rest\Get(path="/personas")
      * @Rest\View(serializerGroups={"persona"}, serializerEnableMaxDepthChecks=true)
      */
-    public function getPersonas(PersonaRepository $personaRepository)
+    public function getPersonas(PersonaManager $personaManager)
     {
-        return $personaRepository->findAll();
+        return $personaManager->getRepository()->findAll();
     }
 
     /**
      * @Rest\Post(path="/personas")
      * @Rest\View(serializerGroups={"persona"}, serializerEnableMaxDepthChecks=true)
      */
-    public function postPersonas(EntityManagerInterface $em, Request $request, FileUploader $fileUploader)
-    {
-        $personaDto = new PersonaDto();
-        $form = $this->createForm(PersonaFormType::class, $personaDto);
-        $form->handleRequest($request);
-
-        if (!$form->isSubmitted()) {
-            return new Response('', Response::HTTP_BAD_REQUEST);
-        }
-
-        if ($form->isValid()) {
-            $persona = new Persona();
-            $persona->setNombre($personaDto->nombre);
-            if ($personaDto->base64Image) {
-                $fileName = $fileUploader->uploadBase64File($personaDto->base64Image);
-                $persona->setImage($fileName);
-            }
-            $em->persist($persona);
-            $em->flush($persona);
-            return $persona;
-        }
-        return $form;
+    public function postPersonas(
+        PersonaManager $personaManager,
+        PersonaFormProcessor $personaFormProcessor,
+        Request $request,
+    ) {
+        $persona = $personaManager->create();
+        [$persona, $error] = ($personaFormProcessor)($persona, $request);
+        $statusCode = $persona ? Response::HTTP_CREATED :  Response::HTTP_BAD_REQUEST;
+        $data = $persona ?? $error;
+        return RestBundleView::create($data, $statusCode);
     }
 
     /**
@@ -62,61 +43,34 @@ class PersonasController extends AbstractFOSRestController
      */
     public function editPersonas(
         int $id,
-        EntityManagerInterface $em,
-        PersonaRepository $personaRepository,
-        NacionalidadRepository $nacionalidadRepository,
-        Request $request,
-        FileUploader $fileUploader
+        PersonaFormProcessor $personaFormProcessor,
+        PersonaManager $personaManager,
+        Request $request
     ) {
-        $persona = $personaRepository->find($id);
+        $persona = $personaManager->find($id);
         if (!$persona) {
-            throw $this->createNotFoundException('Persona no encontrada');
+            return RestBundleView::create('Persona not found', Response::HTTP_BAD_REQUEST);
         }
-        $personaDto = PersonaDto::createFromPersona($persona);
+        [$persona, $error] = ($personaFormProcessor)($persona, $request);
+        $statusCode = $persona ? Response::HTTP_CREATED :  Response::HTTP_BAD_REQUEST;
+        $data = $persona ?? $error;
+        return RestBundleView::create($data, $statusCode);
+    }
 
-        $originalNacionalidades = new ArrayCollection();
-        foreach ($persona->getNacionalidades() as $nacionalidad) {
-            $nacionalidadDto = NacionalidadDto::createFromNacionalidad($nacionalidad);
-            $personaDto->nacionalidades[] = $nacionalidadDto;
-            $originalNacionalidades->add($nacionalidadDto);
+    /**
+     * @Rest\Delete(path="/personas/{id}", requirements={"id"="\d+"})
+     * @Rest\View(serializerGroups={"persona"}, serializerEnableMaxDepthChecks=true)
+     */
+    public function deletePersonas(
+        int $id,
+        PersonaManager $personaManager,
+        Request $request
+    ) {
+        $persona = $personaManager->find($id);
+        if (!$persona) {
+            return RestBundleView::create('Persona not found', Response::HTTP_BAD_REQUEST);
         }
-
-        $form = $this->createForm(PersonaFormType::class, $personaDto);
-        $form->handleRequest($request);
-        if (!$form->isSubmitted()) {
-            return new Response('', Response::HTTP_BAD_REQUEST);
-        }
-        if ($form->isValid()) {
-            // Borrar categorias
-            foreach ($originalNacionalidades as $originalNacionalidadDto) {
-                if (!in_array($originalNacionalidadDto, $personaDto->nacionalidades)) {
-                    $nacionalidad = $nacionalidadRepository->find($originalNacionalidadDto->id);
-                    $persona->removeNacionalidade($nacionalidad);
-                }
-            }
-
-            // Agregar Categorias
-            foreach ($personaDto->nacionalidades as $newNacionalidadDto) {
-                if (!$originalNacionalidades->contains($newNacionalidadDto)) {
-                    $nacionalidad = $nacionalidadRepository->find($newNacionalidadDto->id ?? 0);
-                    if (!$nacionalidad) {
-                        $nacionalidad = new Nacionalidad();
-                        $nacionalidad->setNombre($newNacionalidadDto->nombre);
-                        $em->persist($nacionalidad);
-                    }
-                    $persona->addNacionalidade($nacionalidad);
-                }
-            }
-            $persona->setNombre($personaDto->nombre);
-            if ($personaDto->base64Image) {
-                $fileName = $fileUploader->uploadBase64File($personaDto->base64Image);
-                $persona->setImage($fileName);
-            }
-            $em->persist($persona);
-            $em->flush();
-            $em->refresh($persona);
-            return $persona;
-        }
-        return $form;
+        $personaManager->delete($persona);
+        return RestBundleView::create(null, Response::HTTP_NO_CONTENT);
     }
 }
