@@ -26,7 +26,8 @@ class PersonaFormType extends AbstractType
     public function configureOptions(OptionsResolver $resolver)
     {
         $resolver->setDefaults([
-            'data_class' => PersonaDto::class
+            'data_class' => PersonaDto::class,
+            'csrf_protection' => false
         ]);
     }
 

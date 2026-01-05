@@ -20,7 +20,8 @@ class NacionalidadFormType extends AbstractType
     public function configureOptions(OptionsResolver $resolver)
     {
         $resolver->setDefaults([
-            'data_class' => NacionalidadDto::class
+            'data_class' => NacionalidadDto::class,
+            'csrf_protection' => false
         ]);
     }
 

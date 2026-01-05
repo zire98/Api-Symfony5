@@ -22,6 +22,19 @@ class PersonasController extends AbstractFOSRestController
     }
 
     /**
+     * @Rest\Get(path="/personas/{id}", requirements={"id"="\d+"})
+     * @Rest\View(serializerGroups={"persona"}, serializerEnableMaxDepthChecks=true)
+     */
+    public function getPersona(PersonaManager $personaManager, int $id)
+    {
+        $persona = $personaManager->find($id);
+        if (!$persona) {
+            return RestBundleView::create('Persona not found', Response::HTTP_BAD_REQUEST);
+        }
+        return $persona;
+    }
+
+    /**
      * @Rest\Post(path="/personas")
      * @Rest\View(serializerGroups={"persona"}, serializerEnableMaxDepthChecks=true)
      */
